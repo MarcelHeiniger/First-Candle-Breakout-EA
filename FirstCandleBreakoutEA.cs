@@ -52,9 +52,6 @@ namespace cAlgo.Robots
     {
         #region Parameters
 
-        [Parameter("=== TIMING SETTINGS ===")]
-        public string TimingHeader { get; set; }
-
         [Parameter("Time Zone", DefaultValue = "Broker Server Time", Group = "Timing")]
         public string TimeZone { get; set; }
 
@@ -67,17 +64,11 @@ namespace cAlgo.Robots
         [Parameter("Close Trade at Time", DefaultValue = true, Group = "Timing")]
         public bool CloseTradeAtTime { get; set; }
 
-        [Parameter("=== ENTRY LOGIC ===")]
-        public string EntryHeader { get; set; }
-
         [Parameter("Entry Direction", DefaultValue = EntryDirection.MovingAverage, Group = "Entry Logic")]
         public EntryDirection EntryDirectionMode { get; set; }
 
         [Parameter("MA Period", DefaultValue = 200, MinValue = 1, Group = "Entry Logic")]
         public int MAPeriod { get; set; }
-
-        [Parameter("=== STOP LOSS SETTINGS ===")]
-        public string SLHeader { get; set; }
 
         [Parameter("Margin (Pips)", DefaultValue = 0, MinValue = 0, Group = "Stop Loss")]
         public double Margin { get; set; }
@@ -85,14 +76,8 @@ namespace cAlgo.Robots
         [Parameter("Minimum SL (Pips)", DefaultValue = 100, MinValue = 1, Group = "Stop Loss")]
         public double MinSL { get; set; }
 
-        [Parameter("=== TAKE PROFIT SETTINGS ===")]
-        public string TPHeader { get; set; }
-
         [Parameter("Desired Risk:Reward", DefaultValue = 4, MinValue = 0.1, Group = "Take Profit")]
         public double DesiredRR { get; set; }
-
-        [Parameter("=== RISK MANAGEMENT ===")]
-        public string RiskHeader { get; set; }
 
         [Parameter("Max SL Value", DefaultValue = 1, MinValue = 0.01, Group = "Risk Management")]
         public double MaxSLValue { get; set; }
@@ -310,23 +295,26 @@ namespace cAlgo.Robots
                     }
 
                 case EntryDirection.MovingAverage:
-                    // MA logic - enter based on price vs MA
-                    double maValue = _ma.Result[barIndex];
-                    Print($"MA({MAPeriod}): {maValue:F5}, Close: {close:F5}");
+                    // MA logic - based on MA trend direction during first candle
+                    // Compare MA at candle close vs MA at candle open
+                    double maAtClose = _ma.Result[barIndex];
+                    double maAtOpen = _ma.Result[barIndex - 1]; // Previous bar (candle open)
                     
-                    if (close < maValue)
+                    Print($"MA at Open: {maAtOpen:F5}, MA at Close: {maAtClose:F5}");
+                    
+                    if (maAtClose < maAtOpen)
                     {
-                        Print("Price below MA - Signal: SHORT");
+                        Print("MA is BEARISH (trending down) - Signal: SHORT");
                         return TradeType.Sell;
                     }
-                    else if (close > maValue)
+                    else if (maAtClose > maAtOpen)
                     {
-                        Print("Price above MA - Signal: LONG");
+                        Print("MA is BULLISH (trending up) - Signal: LONG");
                         return TradeType.Buy;
                     }
                     else
                     {
-                        Print("Price exactly at MA - No signal");
+                        Print("MA is FLAT (no trend) - No signal");
                         return null;
                     }
 

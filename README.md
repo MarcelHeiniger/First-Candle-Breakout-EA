@@ -98,10 +98,10 @@ The EA offers two entry modes:
 
 #### Mode 2: Moving Average (Default)
 1. **Wait** for the first 1-hour candle of the day to close (at `First Candle Time`)
-2. **Compare** candle close price with Moving Average:
-   - If **close < MA**: Enter **SHORT** at market
-   - If **close > MA**: Enter **LONG** at market
-   - If **close = MA**: No trade
+2. **Check** the Moving Average trend during that candle:
+   - If **MA trending down** (MA value at close < MA value at open): Enter **SHORT** at market
+   - If **MA trending up** (MA value at close > MA value at open): Enter **LONG** at market
+   - If **MA flat** (no change): No trade
 
 ### Stop Loss Calculation
 
