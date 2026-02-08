@@ -10,7 +10,7 @@ using cAlgo.Indicators;
  * EA Name: First Candle Breakout EA
  * Platform: cTrader
  * Author: Marcel Heiniger
- * Version: 1.1.3
+ * Version: 1.2.0
  * Date: 2026-02-08
  * ============================================================================
  * 
@@ -24,6 +24,15 @@ using cAlgo.Indicators;
  * ============================================================================
  * VERSION CONTROL & CHANGELOG
  * ============================================================================
+ * 
+ * v1.2.0 - 2026-02-08
+ * - NEW FEATURE: Draw Down Protection System
+ * - Automatically reduces risk when draw down reaches threshold
+ * - Stops trading when max draw down is reached
+ * - Three draw down base options: Balance High Watermark, Equity High Watermark, Starting Balance
+ * - Configurable protection levels and risk reduction percentage
+ * - Hysteresis: stays in protected mode until recovery threshold reached
+ * - Changed default Close Trade Time to 21:30 (avoids swap fees)
  * 
  * v1.1.3 - 2026-02-08
  * - Fixed time-based closure to avoid swap fees
@@ -76,7 +85,7 @@ namespace cAlgo.Robots
         [Parameter("First Candle Time (HH:MM)", DefaultValue = "01:00", Group = "Timing")]
         public string FirstCandleTime { get; set; }
 
-        [Parameter("Close Trade Time (HH:MM)", DefaultValue = "23:00", Group = "Timing")]
+        [Parameter("Close Trade Time (HH:MM)", DefaultValue = "21:30", Group = "Timing")]
         public string CloseTradeTime { get; set; }
 
         [Parameter("Close Trade at Time", DefaultValue = true, Group = "Timing")]
@@ -106,6 +115,21 @@ namespace cAlgo.Robots
         [Parameter("Max Lot Size", DefaultValue = 5, MinValue = 0.01, Group = "Risk Management")]
         public double MaxLotSize { get; set; }
 
+        [Parameter("Draw Down Base", DefaultValue = DrawDownBase.BalanceHighWatermark, Group = "Draw Down Protection")]
+        public DrawDownBase DDBase { get; set; }
+
+        [Parameter("Start Protect Draw Down (%)", DefaultValue = 5, MinValue = 0, MaxValue = 100, Group = "Draw Down Protection")]
+        public double StartProtectDD { get; set; }
+
+        [Parameter("Reduce Risk By (%)", DefaultValue = 50, MinValue = 0, MaxValue = 100, Group = "Draw Down Protection")]
+        public double ReduceRiskBy { get; set; }
+
+        [Parameter("Max Draw Down (%)", DefaultValue = 9, MinValue = 0, MaxValue = 100, Group = "Draw Down Protection")]
+        public double MaxDD { get; set; }
+
+        [Parameter("Stay Protected Until (%)", DefaultValue = 3, MinValue = 0, MaxValue = 100, Group = "Draw Down Protection")]
+        public double StayProtectedUntil { get; set; }
+
         #endregion
 
         #region Private Fields
@@ -117,6 +141,8 @@ namespace cAlgo.Robots
         private TimeSpan _closeTradeTimeSpan;
         private string _tradeLabel = "FirstCandleEA";
         private MovingAverage _ma;
+        private double _highWatermark;
+        private bool _inProtectedMode;
 
         #endregion
 
@@ -140,7 +166,7 @@ namespace cAlgo.Robots
             }
 
             Print("=== First Candle Breakout EA Started ===");
-            Print($"Version: 1.1.3");
+            Print($"Version: 1.2.0");
             Print($"Symbol: {SymbolName}");
             Print($"First Candle Time: {FirstCandleTime}");
             Print($"Close Trade Time: {CloseTradeTime}");
@@ -150,10 +176,20 @@ namespace cAlgo.Robots
             Print($"Max Lot Size: {MaxLotSize}");
             Print($"Min SL: {MinSL} pips");
             Print($"Target RR: {DesiredRR}");
+            Print($"--- Draw Down Protection ---");
+            Print($"DD Base: {DDBase}");
+            Print($"Start Protect: {StartProtectDD}%");
+            Print($"Reduce Risk By: {ReduceRiskBy}%");
+            Print($"Max DD: {MaxDD}%");
+            Print($"Stay Protected Until: {StayProtectedUntil}%");
             Print("========================================");
 
             // Initialize Moving Average
             _ma = Indicators.MovingAverage(Bars.ClosePrices, MAPeriod, MovingAverageType.Simple);
+
+            // Initialize draw down tracking
+            _highWatermark = GetDrawDownBaseValue();
+            _inProtectedMode = false;
 
             _lastTradeDate = DateTime.MinValue;
             _tradeTakenToday = false;
@@ -179,6 +215,23 @@ namespace cAlgo.Robots
             if (IsFirstCandleCloseTime(currentBarTime) && !_tradeTakenToday)
             {
                 Print($"First candle detected at {currentTime}");
+                
+                // Update high watermark and check draw down
+                UpdateHighWatermark();
+                double currentDD = CalculateDrawDown();
+                
+                Print($"Draw Down Status: {currentDD:F2}%");
+                
+                // Check if max draw down reached - stop trading
+                if (currentDD >= MaxDD)
+                {
+                    Print($"WARNING: Max Draw Down ({MaxDD}%) reached! Trading suspended.");
+                    Print($"Current DD: {currentDD:F2}%. No trade will be taken.");
+                    _tradeTakenToday = true; // Mark as taken to prevent trade today
+                    _lastTradeDate = currentDate;
+                    return;
+                }
+                
                 ProcessFirstCandle();
                 _tradeTakenToday = true;
                 _lastTradeDate = currentDate;
@@ -364,29 +417,27 @@ namespace cAlgo.Robots
         private double CalculatePositionSize(double entryPrice, double stopLoss)
         {
             double slDistanceInPrice = Math.Abs(entryPrice - stopLoss);
-            double riskAmount = 0;
+            double baseRiskAmount = 0;
 
-            // Calculate risk amount based on unit type
+            // Calculate base risk amount based on unit type
             switch (MaxSLUnit)
             {
                 case RiskUnit.PercentBalance:
-                    riskAmount = Account.Balance * (MaxSLValue / 100.0);
+                    baseRiskAmount = Account.Balance * (MaxSLValue / 100.0);
                     break;
                 case RiskUnit.PercentEquity:
-                    riskAmount = Account.Equity * (MaxSLValue / 100.0);
+                    baseRiskAmount = Account.Equity * (MaxSLValue / 100.0);
                     break;
                 case RiskUnit.AccountCurrency:
-                    riskAmount = MaxSLValue;
+                    baseRiskAmount = MaxSLValue;
                     break;
             }
 
+            // Apply draw down protection risk reduction
+            double currentDD = CalculateDrawDown();
+            double riskAmount = ApplyDrawDownProtection(baseRiskAmount, currentDD);
+
             // Calculate position size based on risk and SL distance
-            // Formula: Volume = Risk / (SL Distance in Price × Pip Value per Unit Volume)
-            double volumeInUnits;
-            
-            // For proper calculation across all symbol types
-            // We calculate: how much does 1 unit lose if SL is hit?
-            // Then: Volume = Risk Amount / Loss per Unit
             double slDistanceInPips = slDistanceInPrice / Symbol.PipSize;
             
             // Get pip value for minimum volume to calculate per-unit risk
@@ -396,7 +447,7 @@ namespace cAlgo.Robots
             
             // Calculate how many min volumes we need
             double numberOfMinVolumes = riskAmount / riskPerMinVolume;
-            volumeInUnits = numberOfMinVolumes * minVolume;
+            double volumeInUnits = numberOfMinVolumes * minVolume;
 
             // Apply maximum lot size cap (convert lots to units)
             double maxVolumeInUnits = MaxLotSize * 100000;
@@ -406,7 +457,9 @@ namespace cAlgo.Robots
             volumeInUnits = Symbol.NormalizeVolumeInUnits(volumeInUnits, RoundingMode.Down);
 
             Print($"Position Size Calculation:");
-            Print($"  Risk Amount: {riskAmount:F2} {Account.Currency}");
+            Print($"  Base Risk Amount: {baseRiskAmount:F2} {Account.Currency}");
+            Print($"  Current Draw Down: {currentDD:F2}%");
+            Print($"  Actual Risk Amount: {riskAmount:F2} {Account.Currency}");
             Print($"  SL Distance: {slDistanceInPips:F1} pips ({slDistanceInPrice:F2} price)");
             Print($"  Pip Value (min vol): {pipValueForMinVolume:F5}");
             Print($"  Calculated Volume: {volumeInUnits} units ({volumeInUnits / 100000:F2} lots)");
@@ -453,6 +506,92 @@ namespace cAlgo.Robots
             return Math.Abs((currentTime - _closeTradeTimeSpan).TotalMinutes) < tolerance.TotalMinutes;
         }
 
+        private double GetDrawDownBaseValue()
+        {
+            switch (DDBase)
+            {
+                case DrawDownBase.BalanceHighWatermark:
+                    return Account.Balance;
+                case DrawDownBase.EquityHighWatermark:
+                    return Account.Equity;
+                case DrawDownBase.StartingBalance:
+                    return Account.Balance; // Starting balance at EA start
+                default:
+                    return Account.Balance;
+            }
+        }
+
+        private void UpdateHighWatermark()
+        {
+            double currentValue = GetDrawDownBaseValue();
+            
+            // Only update if current value is higher than watermark
+            if (currentValue > _highWatermark)
+            {
+                Print($"High Watermark Updated: {_highWatermark:F2} → {currentValue:F2}");
+                _highWatermark = currentValue;
+            }
+        }
+
+        private double CalculateDrawDown()
+        {
+            double currentValue = GetDrawDownBaseValue();
+            
+            if (_highWatermark <= 0)
+                return 0;
+            
+            double drawDown = ((_highWatermark - currentValue) / _highWatermark) * 100.0;
+            return Math.Max(0, drawDown); // Never negative
+        }
+
+        private double ApplyDrawDownProtection(double baseRiskAmount, double currentDD)
+        {
+            // Check protection mode transitions
+            if (currentDD >= StartProtectDD)
+            {
+                if (!_inProtectedMode)
+                {
+                    Print($">>> ENTERING PROTECTED MODE <<<");
+                    Print($"Draw Down ({currentDD:F2}%) >= Start Protect DD ({StartProtectDD}%)");
+                    _inProtectedMode = true;
+                }
+                
+                // Apply risk reduction
+                double reductionMultiplier = 1.0 - (ReduceRiskBy / 100.0);
+                double reducedRisk = baseRiskAmount * reductionMultiplier;
+                Print($"Risk Reduced: {baseRiskAmount:F2} → {reducedRisk:F2} (Reduction: {ReduceRiskBy}%)");
+                return reducedRisk;
+            }
+            else if (currentDD <= StayProtectedUntil)
+            {
+                // Recovery threshold reached - exit protected mode
+                if (_inProtectedMode)
+                {
+                    Print($">>> EXITING PROTECTED MODE <<<");
+                    Print($"Draw Down ({currentDD:F2}%) <= Stay Protected Until ({StayProtectedUntil}%)");
+                    _inProtectedMode = false;
+                }
+                return baseRiskAmount; // Full risk
+            }
+            else
+            {
+                // In the gap between StayProtectedUntil and StartProtectDD
+                if (_inProtectedMode)
+                {
+                    // Stay in protected mode until we reach StayProtectedUntil
+                    double reductionMultiplier = 1.0 - (ReduceRiskBy / 100.0);
+                    double reducedRisk = baseRiskAmount * reductionMultiplier;
+                    Print($"Staying in Protected Mode - Risk: {reducedRisk:F2}");
+                    return reducedRisk;
+                }
+                else
+                {
+                    // Not in protected mode yet
+                    return baseRiskAmount;
+                }
+            }
+        }
+
         #endregion
     }
 
@@ -469,6 +608,13 @@ namespace cAlgo.Robots
     {
         FirstCandle,
         MovingAverage
+    }
+
+    public enum DrawDownBase
+    {
+        BalanceHighWatermark,
+        EquityHighWatermark,
+        StartingBalance
     }
 
     #endregion

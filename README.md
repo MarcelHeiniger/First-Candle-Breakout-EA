@@ -16,6 +16,7 @@ This EA implements a flexible breakout strategy with multiple entry modes:
 
 - ✅ Flexible entry logic: First Candle or Moving Average based
 - ✅ Configurable Moving Average period (default 200)
+- ✅ **Draw Down Protection System** - automatically reduces risk and stops trading during drawdowns
 - ✅ Flexible timing configuration (customize first candle time and close time)
 - ✅ Multiple timezone support
 - ✅ Dynamic stop loss with minimum distance enforcement
@@ -83,6 +84,16 @@ This EA implements a flexible breakout strategy with multiple entry modes:
 | Max SL Unit | % Balance | Risk unit: % Balance, % Equity, or Account Currency |
 | Max Lot Size | 5 | Maximum position size cap (lots) |
 
+### Draw Down Protection
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| Draw Down Base | Balance High Watermark | Base for DD calculation: Balance High Watermark, Equity High Watermark, or Starting Balance |
+| Start Protect Draw Down (%) | 5 | Drawdown level that triggers risk reduction |
+| Reduce Risk By (%) | 50 | Percentage to reduce risk when in protection mode |
+| Max Draw Down (%) | 9 | Maximum drawdown - stops all trading when reached |
+| Stay Protected Until (%) | 3 | Must recover to this level before returning to full risk |
+
 ## 📖 How It Works
 
 ### Entry Logic
@@ -133,6 +144,31 @@ The EA calculates position size based on:
 - SL Distance: 100 pips
 - Pip Value: $10 per lot
 - Position Size: $100 / (100 pips × $10) = 0.1 lots
+
+### Draw Down Protection
+
+The EA includes an intelligent protection system to preserve capital during drawdown periods:
+
+**Normal Mode (DD < 3%):**
+- Trades with full risk amount (e.g., $100)
+
+**Protected Mode (DD ≥ 5% and < 9%):**
+- Risk reduced by configured percentage (default 50%)
+- Example: $100 → $50 per trade
+- Stays in protected mode until DD recovers to "Stay Protected Until" level (default 3%)
+
+**Trading Suspended (DD ≥ 9%):**
+- No new trades opened
+- EA waits for manual intervention or account recovery
+
+**Hysteresis Example:**
+1. DD reaches 5% → Enter protected mode, risk $50
+2. DD rises to 7% → Stay in protected mode, risk $50
+3. DD drops to 4% → Still in protected mode (above 3% threshold), risk $50
+4. DD drops to 2.5% → Exit protected mode, return to full risk $100
+5. DD rises to 4.5% → Not in protected mode yet (below 5%), full risk $100
+
+This prevents the EA from constantly switching between modes during volatile periods.
 
 ### Trade Management
 
@@ -214,6 +250,15 @@ Before running this EA on a live account:
 5. **Adjust** risk parameters based on results
 
 ## 🔄 Version History
+
+### v1.2.0 - 2026-02-08
+- **NEW FEATURE**: Draw Down Protection System
+- Automatically reduces risk when draw down reaches threshold
+- Stops trading when max draw down is reached
+- Three draw down base options: Balance High Watermark, Equity High Watermark, Starting Balance
+- Configurable protection levels and risk reduction percentage
+- Hysteresis: stays in protected mode until recovery threshold reached
+- Changed default Close Trade Time to 21:30 (avoids swap fees)
 
 ### v1.1.3 - 2026-02-08
 - Fixed time-based closure to avoid swap fees
