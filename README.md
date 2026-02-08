@@ -16,6 +16,7 @@ This EA implements a flexible breakout strategy with multiple entry modes:
 
 - ✅ Flexible entry logic: First Candle or Moving Average based
 - ✅ Configurable Moving Average period (default 200)
+- ✅ **Trailing Stop** - optional intelligent profit protection
 - ✅ **Draw Down Protection System** - automatically reduces risk and stops trading during drawdowns
 - ✅ Flexible timing configuration (customize first candle time and close time)
 - ✅ Multiple timezone support
@@ -84,6 +85,14 @@ This EA implements a flexible breakout strategy with multiple entry modes:
 |-----------|---------|-------------|
 | Desired Risk:Reward | 4 | Target risk-reward ratio |
 
+### Trailing Stop
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| Enable Trailing Stop | No | Enable/disable trailing stop feature |
+| Trailing Start (%) | 50 | Profit level (% of TP distance) to activate trailing |
+| Trailing Distance (%) | 25 | Trail distance as % of TP distance |
+
 ### Draw Down Protection
 
 | Parameter | Default | Description |
@@ -146,6 +155,38 @@ The EA calculates position size based on:
 - SL Distance: 100 pips
 - Pip Value: $10 per lot
 - Position Size: $100 / (100 pips × $10) = 0.1 lots
+
+### Trailing Stop (Optional)
+
+The EA includes an intelligent trailing stop feature to lock in profits:
+
+**How It Works:**
+
+1. **Activation Trigger:**
+   - Activates when profit reaches a % of TP distance (default: 50%)
+   - Example: TP is 400 pips away, trail activates at 200 pips profit
+
+2. **Trail Distance Calculation:**
+   - Calculated ONCE when trailing activates
+   - Distance = % of TP distance (default: 25%)
+   - Example: TP is 400 pips, trail distance = 100 pips (25% of 400)
+
+3. **Updates:**
+   - Checked and updated on each candle close
+   - SL moves only in favorable direction (never reversed)
+   - LONG: SL moves up only
+   - SHORT: SL moves down only
+
+**Example Scenario:**
+- Entry: 100.00
+- TP: 104.00 (400 pips)
+- SL: 96.00 (400 pips)
+- Trailing Start: 50% → Activates at profit of 200 pips (102.00)
+- Trailing Distance: 25% → Trail at 100 pips (25% of 400)
+- At 102.00: Trailing activates, SL moves to 101.00 (102.00 - 100 pips)
+- At 103.00: SL moves to 102.00
+- At 103.50: SL moves to 102.50
+- If price reverses: SL stays at highest level (locks in profit)
 
 ### Draw Down Protection
 
@@ -280,6 +321,15 @@ Before running this EA on a live account:
 5. **Adjust** risk parameters based on results
 
 ## 🔄 Version History
+
+### v1.3.0 - 2026-02-08
+- **NEW FEATURE**: Trailing Stop
+- Optional trailing stop that activates when profit reaches X% of TP distance
+- Trail distance calculated as % of TP distance (calculated once when activated)
+- Updates on each candle close
+- Configurable activation trigger (default: 50% of TP)
+- Configurable trail distance (default: 25% of TP)
+- SL only moves in favorable direction (never against position)
 
 ### v1.2.5 - 2026-02-08
 - Improved parameter organization for better UX

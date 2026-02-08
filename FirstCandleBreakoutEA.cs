@@ -10,7 +10,7 @@ using cAlgo.Indicators;
  * EA Name: First Candle Breakout EA
  * Platform: cTrader
  * Author: Marcel Heiniger
- * Version: 1.2.5
+ * Version: 1.3.0
  * Date: 2026-02-08
  * ============================================================================
  * 
@@ -24,6 +24,15 @@ using cAlgo.Indicators;
  * ============================================================================
  * VERSION CONTROL & CHANGELOG
  * ============================================================================
+ * 
+ * v1.3.0 - 2026-02-08
+ * - NEW FEATURE: Trailing Stop
+ * - Optional trailing stop that activates when profit reaches X% of TP distance
+ * - Trail distance calculated as % of TP distance (calculated once when activated)
+ * - Updates on each candle close
+ * - Configurable activation trigger (default: 50% of TP)
+ * - Configurable trail distance (default: 25% of TP)
+ * - SL only moves in favorable direction (never against position)
  * 
  * v1.2.5 - 2026-02-08
  * - Improved parameter organization for better UX
@@ -151,6 +160,15 @@ namespace cAlgo.Robots
         [Parameter("Desired Risk:Reward", DefaultValue = 4, MinValue = 0.1, Group = "Take Profit")]
         public double DesiredRR { get; set; }
 
+        [Parameter("Enable Trailing Stop", DefaultValue = false, Group = "Trailing Stop")]
+        public bool EnableTrailingStop { get; set; }
+
+        [Parameter("Trailing Start (%)", DefaultValue = 50, MinValue = 0, MaxValue = 100, Group = "Trailing Stop")]
+        public double TrailingStart { get; set; }
+
+        [Parameter("Trailing Distance (%)", DefaultValue = 25, MinValue = 1, MaxValue = 100, Group = "Trailing Stop")]
+        public double TrailingDistance { get; set; }
+
         [Parameter("Draw Down Base", DefaultValue = DrawDownBase.BalanceHighWatermark, Group = "Draw Down Protection")]
         public DrawDownBase DDBase { get; set; }
 
@@ -186,6 +204,8 @@ namespace cAlgo.Robots
         private double _highWatermark;
         private double _maxDDReferenceValue;
         private bool _inProtectedMode;
+        private bool _trailingActivated;
+        private double _trailingDistanceInPrice;
 
         #endregion
 
@@ -209,7 +229,7 @@ namespace cAlgo.Robots
             }
 
             Print("=== First Candle Breakout EA Started ===");
-            Print($"Version: 1.2.5");
+            Print($"Version: 1.3.0");
             Print($"Symbol: {SymbolName}");
             Print($"--- Risk Management ---");
             Print($"Risk Per Trade: {MaxSLValue} {MaxSLUnit}");
@@ -224,6 +244,13 @@ namespace cAlgo.Robots
             Print($"Min SL: {MinSL} pips");
             Print($"Margin: {Margin} pips");
             Print($"Target RR: {DesiredRR}");
+            Print($"--- Trailing Stop ---");
+            Print($"Enabled: {EnableTrailingStop}");
+            if (EnableTrailingStop)
+            {
+                Print($"Trailing Start: {TrailingStart}% of TP distance");
+                Print($"Trailing Distance: {TrailingDistance}% of TP distance");
+            }
             Print($"--- Draw Down Protection ---");
             Print($"DD Base: {DDBase}");
             Print($"Start Protect: {StartProtectDD}%");
@@ -268,6 +295,7 @@ namespace cAlgo.Robots
             {
                 _tradeTakenToday = false;
                 _positionsClosedToday = false;
+                _trailingActivated = false;
                 Print($"New trading day: {currentDate:yyyy-MM-dd}");
             }
 
@@ -299,6 +327,12 @@ namespace cAlgo.Robots
                 ProcessFirstCandle();
                 _tradeTakenToday = true;
                 _lastTradeDate = currentDate;
+            }
+
+            // Check and update trailing stop on each bar close
+            if (EnableTrailingStop)
+            {
+                UpdateTrailingStop();
             }
         }
 
@@ -542,6 +576,73 @@ namespace cAlgo.Robots
                 foreach (var position in positions)
                 {
                     ClosePosition(position);
+                }
+            }
+        }
+
+        private void UpdateTrailingStop()
+        {
+            var positions = Positions.FindAll(_tradeLabel, SymbolName);
+            
+            if (positions.Length == 0)
+                return;
+
+            foreach (var position in positions)
+            {
+                // Calculate profit and TP distance
+                double entryPrice = position.EntryPrice;
+                double? takeProfit = position.TakeProfit;
+                
+                if (!takeProfit.HasValue)
+                    continue;
+
+                double tpDistance = Math.Abs(takeProfit.Value - entryPrice);
+                double currentPrice = position.TradeType == TradeType.Buy ? Symbol.Bid : Symbol.Ask;
+                double currentProfit = position.TradeType == TradeType.Buy 
+                    ? currentPrice - entryPrice 
+                    : entryPrice - currentPrice;
+
+                // Check if trailing should be activated
+                double triggerDistance = tpDistance * (TrailingStart / 100.0);
+                
+                if (!_trailingActivated && currentProfit >= triggerDistance)
+                {
+                    // Activate trailing - calculate trail distance ONCE
+                    _trailingDistanceInPrice = tpDistance * (TrailingDistance / 100.0);
+                    _trailingActivated = true;
+                    
+                    Print($">>> TRAILING STOP ACTIVATED <<<");
+                    Print($"Profit reached {TrailingStart}% of TP distance");
+                    Print($"Trail Distance: {_trailingDistanceInPrice / Symbol.PipSize:F1} pips ({TrailingDistance}% of TP)");
+                }
+
+                // Update trailing stop if activated
+                if (_trailingActivated)
+                {
+                    double newStopLoss;
+                    
+                    if (position.TradeType == TradeType.Buy)
+                    {
+                        // LONG: Trail up only
+                        newStopLoss = currentPrice - _trailingDistanceInPrice;
+                        
+                        // Only move SL up, never down
+                        if (position.StopLoss.HasValue && newStopLoss <= position.StopLoss.Value)
+                            continue;
+                    }
+                    else
+                    {
+                        // SHORT: Trail down only
+                        newStopLoss = currentPrice + _trailingDistanceInPrice;
+                        
+                        // Only move SL down, never up
+                        if (position.StopLoss.HasValue && newStopLoss >= position.StopLoss.Value)
+                            continue;
+                    }
+
+                    // Modify the stop loss
+                    ModifyPosition(position, newStopLoss, position.TakeProfit);
+                    Print($"Trailing Stop Updated: SL moved to {newStopLoss:F5} (Trail: {_trailingDistanceInPrice / Symbol.PipSize:F1} pips)");
                 }
             }
         }
