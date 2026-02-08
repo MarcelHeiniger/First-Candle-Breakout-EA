@@ -10,7 +10,7 @@ using cAlgo.Indicators;
  * EA Name: First Candle Breakout EA
  * Platform: cTrader
  * Author: Marcel Heiniger
- * Version: 1.2.0
+ * Version: 1.2.1
  * Date: 2026-02-08
  * ============================================================================
  * 
@@ -24,6 +24,14 @@ using cAlgo.Indicators;
  * ============================================================================
  * VERSION CONTROL & CHANGELOG
  * ============================================================================
+ * 
+ * v1.2.1 - 2026-02-08
+ * - Enhanced Max Draw Down with flexible reference base options
+ * - Added Max DD Base parameter: Max Balance or Start Account Value
+ * - Added Start Account Value parameter (default 10000) for accounts with pre-existing trades
+ * - Max Balance mode: DD calculated from highest balance ever reached (dynamic)
+ * - Start Account Value mode: DD calculated from fixed starting value (static)
+ * - Improved logging for Max DD calculations
  * 
  * v1.2.0 - 2026-02-08
  * - NEW FEATURE: Draw Down Protection System
@@ -127,6 +135,12 @@ namespace cAlgo.Robots
         [Parameter("Max Draw Down (%)", DefaultValue = 9, MinValue = 0, MaxValue = 100, Group = "Draw Down Protection")]
         public double MaxDD { get; set; }
 
+        [Parameter("Max DD Base", DefaultValue = MaxDDBase.MaxBalance, Group = "Draw Down Protection")]
+        public MaxDDBase MaxDDBaseMode { get; set; }
+
+        [Parameter("Start Account Value", DefaultValue = 10000, MinValue = 1, Group = "Draw Down Protection")]
+        public double StartAccountValue { get; set; }
+
         [Parameter("Stay Protected Until (%)", DefaultValue = 3, MinValue = 0, MaxValue = 100, Group = "Draw Down Protection")]
         public double StayProtectedUntil { get; set; }
 
@@ -142,6 +156,7 @@ namespace cAlgo.Robots
         private string _tradeLabel = "FirstCandleEA";
         private MovingAverage _ma;
         private double _highWatermark;
+        private double _maxDDReferenceValue;
         private bool _inProtectedMode;
 
         #endregion
@@ -166,7 +181,7 @@ namespace cAlgo.Robots
             }
 
             Print("=== First Candle Breakout EA Started ===");
-            Print($"Version: 1.2.0");
+            Print($"Version: 1.2.1");
             Print($"Symbol: {SymbolName}");
             Print($"First Candle Time: {FirstCandleTime}");
             Print($"Close Trade Time: {CloseTradeTime}");
@@ -181,6 +196,11 @@ namespace cAlgo.Robots
             Print($"Start Protect: {StartProtectDD}%");
             Print($"Reduce Risk By: {ReduceRiskBy}%");
             Print($"Max DD: {MaxDD}%");
+            Print($"Max DD Base: {MaxDDBaseMode}");
+            if (MaxDDBaseMode == MaxDDBase.StartAccountValue)
+            {
+                Print($"Start Account Value: {StartAccountValue:F2}");
+            }
             Print($"Stay Protected Until: {StayProtectedUntil}%");
             Print("========================================");
 
@@ -189,7 +209,11 @@ namespace cAlgo.Robots
 
             // Initialize draw down tracking
             _highWatermark = GetDrawDownBaseValue();
+            _maxDDReferenceValue = GetMaxDDReferenceValue();
             _inProtectedMode = false;
+
+            Print($"Initial High Watermark: {_highWatermark:F2}");
+            Print($"Max DD Reference Value: {_maxDDReferenceValue:F2}");
 
             _lastTradeDate = DateTime.MinValue;
             _tradeTakenToday = false;
@@ -219,14 +243,16 @@ namespace cAlgo.Robots
                 // Update high watermark and check draw down
                 UpdateHighWatermark();
                 double currentDD = CalculateDrawDown();
+                double maxDDAbsolute = CalculateMaxDrawDown();
                 
                 Print($"Draw Down Status: {currentDD:F2}%");
+                Print($"Max DD Check: Current Balance/Equity vs Reference - DD: {maxDDAbsolute:F2}%");
                 
                 // Check if max draw down reached - stop trading
-                if (currentDD >= MaxDD)
+                if (maxDDAbsolute >= MaxDD)
                 {
                     Print($"WARNING: Max Draw Down ({MaxDD}%) reached! Trading suspended.");
-                    Print($"Current DD: {currentDD:F2}%. No trade will be taken.");
+                    Print($"Current Max DD: {maxDDAbsolute:F2}% (Base: {MaxDDBaseMode}). No trade will be taken.");
                     _tradeTakenToday = true; // Mark as taken to prevent trade today
                     _lastTradeDate = currentDate;
                     return;
@@ -521,6 +547,20 @@ namespace cAlgo.Robots
             }
         }
 
+        private double GetMaxDDReferenceValue()
+        {
+            switch (MaxDDBaseMode)
+            {
+                case MaxDDBase.MaxBalance:
+                    // Will be updated dynamically - start with current high watermark
+                    return _highWatermark;
+                case MaxDDBase.StartAccountValue:
+                    return StartAccountValue;
+                default:
+                    return _highWatermark;
+            }
+        }
+
         private void UpdateHighWatermark()
         {
             double currentValue = GetDrawDownBaseValue();
@@ -530,6 +570,13 @@ namespace cAlgo.Robots
             {
                 Print($"High Watermark Updated: {_highWatermark:F2} → {currentValue:F2}");
                 _highWatermark = currentValue;
+                
+                // Update Max DD reference if using MaxBalance mode
+                if (MaxDDBaseMode == MaxDDBase.MaxBalance)
+                {
+                    _maxDDReferenceValue = _highWatermark;
+                    Print($"Max DD Reference Updated: {_maxDDReferenceValue:F2}");
+                }
             }
         }
 
@@ -541,6 +588,18 @@ namespace cAlgo.Robots
                 return 0;
             
             double drawDown = ((_highWatermark - currentValue) / _highWatermark) * 100.0;
+            return Math.Max(0, drawDown); // Never negative
+        }
+
+        private double CalculateMaxDrawDown()
+        {
+            // Calculate draw down from the max DD reference value
+            double currentValue = GetDrawDownBaseValue();
+            
+            if (_maxDDReferenceValue <= 0)
+                return 0;
+            
+            double drawDown = ((_maxDDReferenceValue - currentValue) / _maxDDReferenceValue) * 100.0;
             return Math.Max(0, drawDown); // Never negative
         }
 
@@ -615,6 +674,12 @@ namespace cAlgo.Robots
         BalanceHighWatermark,
         EquityHighWatermark,
         StartingBalance
+    }
+
+    public enum MaxDDBase
+    {
+        MaxBalance,
+        StartAccountValue
     }
 
     #endregion

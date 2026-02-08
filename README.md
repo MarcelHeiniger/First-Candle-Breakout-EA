@@ -92,6 +92,8 @@ This EA implements a flexible breakout strategy with multiple entry modes:
 | Start Protect Draw Down (%) | 5 | Drawdown level that triggers risk reduction |
 | Reduce Risk By (%) | 50 | Percentage to reduce risk when in protection mode |
 | Max Draw Down (%) | 9 | Maximum drawdown - stops all trading when reached |
+| Max DD Base | Max Balance | Reference for Max DD: Max Balance (dynamic) or Start Account Value (static) |
+| Start Account Value | 10000 | Fixed reference value when using Start Account Value mode |
 | Stay Protected Until (%) | 3 | Must recover to this level before returning to full risk |
 
 ## 📖 How It Works
@@ -148,6 +150,34 @@ The EA calculates position size based on:
 ### Draw Down Protection
 
 The EA includes an intelligent protection system to preserve capital during drawdown periods:
+
+**Draw Down Calculation:**
+There are TWO separate draw down calculations:
+
+1. **Protection Draw Down** (for risk reduction):
+   - Uses "Draw Down Base" parameter
+   - Calculated from high watermark (dynamic)
+   - Triggers risk reduction and protected mode
+
+2. **Max Draw Down** (for stopping trading):
+   - Uses "Max DD Base" parameter
+   - Two modes available:
+     - **Max Balance (default)**: DD from highest balance reached (dynamic, updates as you profit)
+     - **Start Account Value**: DD from fixed starting value (static, useful for accounts with pre-existing trades)
+
+**Max DD Base Modes Explained:**
+
+*Max Balance Mode (Dynamic):*
+- Reference updates as balance grows
+- Example: Start at $10k, grow to $12k → Max DD reference becomes $12k
+- 9% Max DD = stops trading if balance drops below $10,920 ($12k - 9%)
+- **Use this for:** Fresh accounts or when you want protection to scale with profits
+
+*Start Account Value Mode (Static):*
+- Reference is fixed at your specified starting value
+- Example: Set Start Account Value = $10k, current balance = $8k (you're already down)
+- 9% Max DD = stops trading if balance drops below $9,100 ($10k - 9%)
+- **Use this for:** Accounts with pre-existing trades, or when resuming EA after a break
 
 **Normal Mode (DD < 3%):**
 - Trades with full risk amount (e.g., $100)
@@ -250,6 +280,14 @@ Before running this EA on a live account:
 5. **Adjust** risk parameters based on results
 
 ## 🔄 Version History
+
+### v1.2.1 - 2026-02-08
+- Enhanced Max Draw Down with flexible reference base options
+- Added Max DD Base parameter: Max Balance or Start Account Value
+- Added Start Account Value parameter (default 10000) for accounts with pre-existing trades
+- Max Balance mode: DD calculated from highest balance ever reached (dynamic)
+- Start Account Value mode: DD calculated from fixed starting value (static)
+- Improved logging for Max DD calculations
 
 ### v1.2.0 - 2026-02-08
 - **NEW FEATURE**: Draw Down Protection System
