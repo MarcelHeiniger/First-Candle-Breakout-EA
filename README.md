@@ -281,6 +281,12 @@ Before running this EA on a live account:
 
 ## 🔄 Version History
 
+### v1.2.4 - 2026-02-08
+- Fixed mid-day start behavior
+- EA now correctly waits until next day's First Candle Time when started mid-day
+- Prevents partial-day trading (e.g., starting at noon won't trade at 01:00 same day)
+- Improved startup logging to show when first trade will be taken
+
 ### v1.2.3 - 2026-02-08
 - Fixed compiler warnings
 - Renamed TimeZone parameter to TimeZoneMode to avoid conflict with inherited member

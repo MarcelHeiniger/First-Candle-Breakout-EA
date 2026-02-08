@@ -10,7 +10,7 @@ using cAlgo.Indicators;
  * EA Name: First Candle Breakout EA
  * Platform: cTrader
  * Author: Marcel Heiniger
- * Version: 1.2.3
+ * Version: 1.2.4
  * Date: 2026-02-08
  * ============================================================================
  * 
@@ -24,6 +24,12 @@ using cAlgo.Indicators;
  * ============================================================================
  * VERSION CONTROL & CHANGELOG
  * ============================================================================
+ * 
+ * v1.2.4 - 2026-02-08
+ * - Fixed mid-day start behavior
+ * - EA now correctly waits until next day's First Candle Time when started mid-day
+ * - Prevents partial-day trading (e.g., starting at noon won't trade at 01:00 same day)
+ * - Improved startup logging to show when first trade will be taken
  * 
  * v1.2.3 - 2026-02-08
  * - Fixed compiler warnings
@@ -193,7 +199,7 @@ namespace cAlgo.Robots
             }
 
             Print("=== First Candle Breakout EA Started ===");
-            Print($"Version: 1.2.3");
+            Print($"Version: 1.2.4");
             Print($"Symbol: {SymbolName}");
             Print($"--- Risk Management ---");
             Print($"Risk Per Trade: {MaxSLValue} {MaxSLUnit}");
@@ -232,9 +238,14 @@ namespace cAlgo.Robots
             Print($"Initial High Watermark: {_highWatermark:F2}");
             Print($"Max DD Reference Value: {_maxDDReferenceValue:F2}");
 
-            _lastTradeDate = DateTime.MinValue;
-            _tradeTakenToday = false;
+            // Initialize to current date to prevent trading on partial day
+            DateTime currentTime = GetCurrentTime();
+            _lastTradeDate = currentTime.Date;
+            _tradeTakenToday = true; // Mark today as taken if starting mid-day
             _positionsClosedToday = false;
+            
+            Print($"EA started at {currentTime:yyyy-MM-dd HH:mm:ss}");
+            Print($"First trade will be taken on next trading day after {FirstCandleTime}");
         }
 
         protected override void OnBar()
