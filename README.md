@@ -47,13 +47,21 @@ This EA implements a flexible breakout strategy with multiple entry modes:
 
 ## 📋 Parameters
 
+### Risk Management
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| Risk Per Trade | 1 | Amount to risk per trade |
+| Risk Unit | % Balance | Risk unit: % Balance, % Equity, or Account Currency |
+| Max Lot Size | 5 | Maximum position size cap (lots) |
+
 ### Timing Settings
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | Time Zone | Broker Server Time | Reference timezone for timing |
 | First Candle Time | 01:00 | Time when the first candle closes (HH:MM) |
-| Close Trade Time | 23:00 | Time to close open trades (HH:MM) |
+| Close Trade Time | 21:30 | Time to close open trades (HH:MM) |
 | Close Trade at Time | Yes | Enable/disable time-based closure |
 
 ### Entry Logic
@@ -75,14 +83,6 @@ This EA implements a flexible breakout strategy with multiple entry modes:
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | Desired Risk:Reward | 4 | Target risk-reward ratio |
-
-### Risk Management
-
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| Max SL Value | 1 | Risk amount (percentage or fixed) |
-| Max SL Unit | % Balance | Risk unit: % Balance, % Equity, or Account Currency |
-| Max Lot Size | 5 | Maximum position size cap (lots) |
 
 ### Draw Down Protection
 
@@ -280,6 +280,12 @@ Before running this EA on a live account:
 5. **Adjust** risk parameters based on results
 
 ## 🔄 Version History
+
+### v1.2.2 - 2026-02-08
+- Improved parameter naming: "Max SL Value/Unit" → "Risk Per Trade/Unit" (clearer intent)
+- Reordered parameter groups: Risk Management now appears first (most important)
+- Better parameter organization for easier configuration
+- Improved startup logging with grouped sections
 
 ### v1.2.1 - 2026-02-08
 - Enhanced Max Draw Down with flexible reference base options

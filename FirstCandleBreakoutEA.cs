@@ -10,7 +10,7 @@ using cAlgo.Indicators;
  * EA Name: First Candle Breakout EA
  * Platform: cTrader
  * Author: Marcel Heiniger
- * Version: 1.2.1
+ * Version: 1.2.2
  * Date: 2026-02-08
  * ============================================================================
  * 
@@ -24,6 +24,12 @@ using cAlgo.Indicators;
  * ============================================================================
  * VERSION CONTROL & CHANGELOG
  * ============================================================================
+ * 
+ * v1.2.2 - 2026-02-08
+ * - Improved parameter naming: "Max SL Value/Unit" → "Risk Per Trade/Unit" (clearer intent)
+ * - Reordered parameter groups: Risk Management now appears first (most important)
+ * - Better parameter organization for easier configuration
+ * - Improved startup logging with grouped sections
  * 
  * v1.2.1 - 2026-02-08
  * - Enhanced Max Draw Down with flexible reference base options
@@ -87,6 +93,15 @@ namespace cAlgo.Robots
     {
         #region Parameters
 
+        [Parameter("Risk Per Trade", DefaultValue = 1, MinValue = 0.01, Group = "Risk Management")]
+        public double MaxSLValue { get; set; }
+
+        [Parameter("Risk Unit", DefaultValue = RiskUnit.PercentBalance, Group = "Risk Management")]
+        public RiskUnit MaxSLUnit { get; set; }
+
+        [Parameter("Max Lot Size", DefaultValue = 5, MinValue = 0.01, Group = "Risk Management")]
+        public double MaxLotSize { get; set; }
+
         [Parameter("Time Zone", DefaultValue = "Broker Server Time", Group = "Timing")]
         public string TimeZone { get; set; }
 
@@ -113,15 +128,6 @@ namespace cAlgo.Robots
 
         [Parameter("Desired Risk:Reward", DefaultValue = 4, MinValue = 0.1, Group = "Take Profit")]
         public double DesiredRR { get; set; }
-
-        [Parameter("Max SL Value", DefaultValue = 1, MinValue = 0.01, Group = "Risk Management")]
-        public double MaxSLValue { get; set; }
-
-        [Parameter("Max SL Unit", DefaultValue = RiskUnit.PercentBalance, Group = "Risk Management")]
-        public RiskUnit MaxSLUnit { get; set; }
-
-        [Parameter("Max Lot Size", DefaultValue = 5, MinValue = 0.01, Group = "Risk Management")]
-        public double MaxLotSize { get; set; }
 
         [Parameter("Draw Down Base", DefaultValue = DrawDownBase.BalanceHighWatermark, Group = "Draw Down Protection")]
         public DrawDownBase DDBase { get; set; }
@@ -181,15 +187,20 @@ namespace cAlgo.Robots
             }
 
             Print("=== First Candle Breakout EA Started ===");
-            Print($"Version: 1.2.1");
+            Print($"Version: 1.2.2");
             Print($"Symbol: {SymbolName}");
+            Print($"--- Risk Management ---");
+            Print($"Risk Per Trade: {MaxSLValue} {MaxSLUnit}");
+            Print($"Max Lot Size: {MaxLotSize}");
+            Print($"--- Timing ---");
             Print($"First Candle Time: {FirstCandleTime}");
             Print($"Close Trade Time: {CloseTradeTime}");
+            Print($"--- Entry Logic ---");
             Print($"Entry Direction: {EntryDirectionMode}");
             Print($"MA Period: {MAPeriod}");
-            Print($"Risk: {MaxSLValue} {MaxSLUnit}");
-            Print($"Max Lot Size: {MaxLotSize}");
+            Print($"--- Stop Loss & Take Profit ---");
             Print($"Min SL: {MinSL} pips");
+            Print($"Margin: {Margin} pips");
             Print($"Target RR: {DesiredRR}");
             Print($"--- Draw Down Protection ---");
             Print($"DD Base: {DDBase}");
