@@ -10,7 +10,7 @@ using cAlgo.Indicators;
  * EA Name: First Candle Breakout EA
  * Platform: cTrader
  * Author: Marcel Heiniger
- * Version: 1.2.4
+ * Version: 1.2.5
  * Date: 2026-02-08
  * ============================================================================
  * 
@@ -24,6 +24,16 @@ using cAlgo.Indicators;
  * ============================================================================
  * VERSION CONTROL & CHANGELOG
  * ============================================================================
+ * 
+ * v1.2.5 - 2026-02-08
+ * - Improved parameter organization for better UX
+ * - Reordered Draw Down Protection parameters to follow logical flow:
+ *   1. DD Base (what to measure)
+ *   2. Start Protect (when protection begins)
+ *   3. Reduce Risk By (how much to reduce)
+ *   4. Stay Protected Until (recovery threshold)
+ *   5. Max DD (stop trading threshold)
+ *   6. Max DD Base & Start Account Value (max DD settings)
  * 
  * v1.2.4 - 2026-02-08
  * - Fixed mid-day start behavior
@@ -150,6 +160,9 @@ namespace cAlgo.Robots
         [Parameter("Reduce Risk By (%)", DefaultValue = 50, MinValue = 0, MaxValue = 100, Group = "Draw Down Protection")]
         public double ReduceRiskBy { get; set; }
 
+        [Parameter("Stay Protected Until (%)", DefaultValue = 3, MinValue = 0, MaxValue = 100, Group = "Draw Down Protection")]
+        public double StayProtectedUntil { get; set; }
+
         [Parameter("Max Draw Down (%)", DefaultValue = 9, MinValue = 0, MaxValue = 100, Group = "Draw Down Protection")]
         public double MaxDD { get; set; }
 
@@ -158,9 +171,6 @@ namespace cAlgo.Robots
 
         [Parameter("Start Account Value", DefaultValue = 10000, MinValue = 1, Group = "Draw Down Protection")]
         public double StartAccountValue { get; set; }
-
-        [Parameter("Stay Protected Until (%)", DefaultValue = 3, MinValue = 0, MaxValue = 100, Group = "Draw Down Protection")]
-        public double StayProtectedUntil { get; set; }
 
         #endregion
 
@@ -199,7 +209,7 @@ namespace cAlgo.Robots
             }
 
             Print("=== First Candle Breakout EA Started ===");
-            Print($"Version: 1.2.4");
+            Print($"Version: 1.2.5");
             Print($"Symbol: {SymbolName}");
             Print($"--- Risk Management ---");
             Print($"Risk Per Trade: {MaxSLValue} {MaxSLUnit}");

@@ -91,10 +91,10 @@ This EA implements a flexible breakout strategy with multiple entry modes:
 | Draw Down Base | Balance High Watermark | Base for DD calculation: Balance High Watermark, Equity High Watermark, or Starting Balance |
 | Start Protect Draw Down (%) | 5 | Drawdown level that triggers risk reduction |
 | Reduce Risk By (%) | 50 | Percentage to reduce risk when in protection mode |
+| Stay Protected Until (%) | 3 | Must recover to this level before returning to full risk |
 | Max Draw Down (%) | 9 | Maximum drawdown - stops all trading when reached |
 | Max DD Base | Max Balance | Reference for Max DD: Max Balance (dynamic) or Start Account Value (static) |
 | Start Account Value | 10000 | Fixed reference value when using Start Account Value mode |
-| Stay Protected Until (%) | 3 | Must recover to this level before returning to full risk |
 
 ## 📖 How It Works
 
@@ -280,6 +280,11 @@ Before running this EA on a live account:
 5. **Adjust** risk parameters based on results
 
 ## 🔄 Version History
+
+### v1.2.5 - 2026-02-08
+- Improved parameter organization for better UX
+- Reordered Draw Down Protection parameters to follow logical flow
+- Parameters now grouped by: measurement → protection → recovery → stop trading
 
 ### v1.2.4 - 2026-02-08
 - Fixed mid-day start behavior
