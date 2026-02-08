@@ -10,7 +10,7 @@ using cAlgo.Indicators;
  * EA Name: First Candle Breakout EA
  * Platform: cTrader
  * Author: Marcel Heiniger
- * Version: 1.3.0
+ * Version: 1.3.1
  * Date: 2026-02-08
  * ============================================================================
  * 
@@ -24,6 +24,10 @@ using cAlgo.Indicators;
  * ============================================================================
  * VERSION CONTROL & CHANGELOG
  * ============================================================================
+ * 
+ * v1.3.1 - 2026-02-08
+ * - Fixed compiler warning: Updated ModifyPosition to use new API with ProtectionType parameter
+ * - Code now compiles without warnings
  * 
  * v1.3.0 - 2026-02-08
  * - NEW FEATURE: Trailing Stop
@@ -229,7 +233,7 @@ namespace cAlgo.Robots
             }
 
             Print("=== First Candle Breakout EA Started ===");
-            Print($"Version: 1.3.0");
+            Print($"Version: 1.3.1");
             Print($"Symbol: {SymbolName}");
             Print($"--- Risk Management ---");
             Print($"Risk Per Trade: {MaxSLValue} {MaxSLUnit}");
@@ -641,7 +645,7 @@ namespace cAlgo.Robots
                     }
 
                     // Modify the stop loss
-                    ModifyPosition(position, newStopLoss, position.TakeProfit);
+                    ModifyPosition(position, newStopLoss, position.TakeProfit, true);
                     Print($"Trailing Stop Updated: SL moved to {newStopLoss:F5} (Trail: {_trailingDistanceInPrice / Symbol.PipSize:F1} pips)");
                 }
             }

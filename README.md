@@ -322,6 +322,10 @@ Before running this EA on a live account:
 
 ## 🔄 Version History
 
+### v1.3.1 - 2026-02-08
+- Fixed compiler warning: Updated ModifyPosition to use new API with ProtectionType parameter
+- Code now compiles without warnings
+
 ### v1.3.0 - 2026-02-08
 - **NEW FEATURE**: Trailing Stop
 - Optional trailing stop that activates when profit reaches X% of TP distance
