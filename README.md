@@ -4,15 +4,18 @@ A cTrader Expert Advisor (cBot) that trades based on the first 1-hour candle of 
 
 ## 📊 Strategy Overview
 
-This EA implements a simple yet effective breakout strategy:
+This EA implements a flexible breakout strategy with multiple entry modes:
 - **Monitors** the first 1-hour candle of the day (configurable time)
-- **Enters LONG** if the candle is bullish (close > open)
-- **Enters SHORT** if the candle is bearish (close < open)
+- **Entry Direction Options:**
+  - **First Candle Mode**: Enter LONG if bullish, SHORT if bearish
+  - **Moving Average Mode**: Enter LONG if price above MA, SHORT if below MA
 - **Risk Management** with dynamic position sizing
 - **Optional** time-based trade closure
 
 ## ✨ Features
 
+- ✅ Flexible entry logic: First Candle or Moving Average based
+- ✅ Configurable Moving Average period (default 200)
 - ✅ Flexible timing configuration (customize first candle time and close time)
 - ✅ Multiple timezone support
 - ✅ Dynamic stop loss with minimum distance enforcement
@@ -52,6 +55,13 @@ This EA implements a simple yet effective breakout strategy:
 | Close Trade Time | 23:00 | Time to close open trades (HH:MM) |
 | Close Trade at Time | Yes | Enable/disable time-based closure |
 
+### Entry Logic
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| Entry Direction | Moving Average | Entry signal mode: First Candle or Moving Average |
+| MA Period | 200 | Moving Average period for MA mode |
+
 ### Stop Loss Settings
 
 | Parameter | Default | Description |
@@ -77,11 +87,21 @@ This EA implements a simple yet effective breakout strategy:
 
 ### Entry Logic
 
+The EA offers two entry modes:
+
+#### Mode 1: First Candle
 1. **Wait** for the first 1-hour candle of the day to close (at `First Candle Time`)
 2. **Analyze** the candle:
    - If **bearish** (close < open): Enter **SHORT** at market
    - If **bullish** (close > open): Enter **LONG** at market
    - If **doji** (close = open): No trade
+
+#### Mode 2: Moving Average (Default)
+1. **Wait** for the first 1-hour candle of the day to close (at `First Candle Time`)
+2. **Compare** candle close price with Moving Average:
+   - If **close < MA**: Enter **SHORT** at market
+   - If **close > MA**: Enter **LONG** at market
+   - If **close = MA**: No trade
 
 ### Stop Loss Calculation
 
@@ -122,8 +142,31 @@ The EA calculates position size based on:
 
 ## 📈 Usage Examples
 
-### Conservative Setup
+### Trend Following Setup (MA Mode)
 ```
+Entry Direction: Moving Average
+MA Period: 200
+Max SL Value: 1
+Max SL Unit: % Balance
+Minimum SL: 100 pips
+Desired RR: 4
+Max Lot Size: 5
+```
+
+### First Candle Breakout Setup
+```
+Entry Direction: First Candle
+Max SL Value: 1.5
+Max SL Unit: % Balance
+Minimum SL: 80 pips
+Desired RR: 3
+Max Lot Size: 3
+```
+
+### Conservative MA Setup
+```
+Entry Direction: Moving Average
+MA Period: 200
 Max SL Value: 0.5
 Max SL Unit: % Balance
 Minimum SL: 150 pips
@@ -131,8 +174,9 @@ Desired RR: 3
 Max Lot Size: 2
 ```
 
-### Aggressive Setup
+### Aggressive First Candle Setup
 ```
+Entry Direction: First Candle
 Max SL Value: 2
 Max SL Unit: % Balance
 Minimum SL: 50 pips
@@ -170,6 +214,13 @@ Before running this EA on a live account:
 5. **Adjust** risk parameters based on results
 
 ## 🔄 Version History
+
+### v1.1.0 - 2026-02-08
+- Added Moving Average filter for entry direction
+- Added Entry Direction parameter (First Candle / Moving Average)
+- MA Period configurable (default 200)
+- Entry logic now more flexible with multiple strategies
+- Improved logging for entry signals
 
 ### v1.0.0 - 2026-02-08
 - Initial release

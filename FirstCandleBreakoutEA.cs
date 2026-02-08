@@ -10,20 +10,26 @@ using cAlgo.Indicators;
  * EA Name: First Candle Breakout EA
  * Platform: cTrader
  * Author: Marcel Heiniger
- * Version: 1.0.0
+ * Version: 1.1.0
  * Date: 2026-02-08
  * ============================================================================
  * 
  * DESCRIPTION:
- * This EA trades based on the first 1-hour candle of the day.
- * - Enters LONG if first candle is bullish
- * - Enters SHORT if first candle is bearish
+ * This EA trades based on the first 1-hour candle of the day with MA filter.
+ * - Entry direction can be determined by First Candle or Moving Average
+ * - Enters LONG/SHORT based on selected entry logic
  * - Uses dynamic position sizing based on risk parameters
  * - Optional time-based trade closure
  * 
  * ============================================================================
  * VERSION CONTROL & CHANGELOG
  * ============================================================================
+ * 
+ * v1.1.0 - 2026-02-08
+ * - Added Moving Average filter for entry direction
+ * - Added Entry Direction parameter (First Candle / Moving Average)
+ * - MA Period configurable (default 200)
+ * - Entry logic now more flexible with multiple strategies
  * 
  * v1.0.0 - 2026-02-08
  * - Initial release
@@ -61,6 +67,15 @@ namespace cAlgo.Robots
         [Parameter("Close Trade at Time", DefaultValue = true, Group = "Timing")]
         public bool CloseTradeAtTime { get; set; }
 
+        [Parameter("=== ENTRY LOGIC ===")]
+        public string EntryHeader { get; set; }
+
+        [Parameter("Entry Direction", DefaultValue = EntryDirection.MovingAverage, Group = "Entry Logic")]
+        public EntryDirection EntryDirectionMode { get; set; }
+
+        [Parameter("MA Period", DefaultValue = 200, MinValue = 1, Group = "Entry Logic")]
+        public int MAPeriod { get; set; }
+
         [Parameter("=== STOP LOSS SETTINGS ===")]
         public string SLHeader { get; set; }
 
@@ -97,6 +112,7 @@ namespace cAlgo.Robots
         private TimeSpan _firstCandleTimeSpan;
         private TimeSpan _closeTradeTimeSpan;
         private string _tradeLabel = "FirstCandleEA";
+        private MovingAverage _ma;
 
         #endregion
 
@@ -120,15 +136,20 @@ namespace cAlgo.Robots
             }
 
             Print("=== First Candle Breakout EA Started ===");
-            Print($"Version: 1.0.0");
+            Print($"Version: 1.1.0");
             Print($"Symbol: {SymbolName}");
             Print($"First Candle Time: {FirstCandleTime}");
             Print($"Close Trade Time: {CloseTradeTime}");
+            Print($"Entry Direction: {EntryDirectionMode}");
+            Print($"MA Period: {MAPeriod}");
             Print($"Risk: {MaxSLValue} {MaxSLUnit}");
             Print($"Max Lot Size: {MaxLotSize}");
             Print($"Min SL: {MinSL} pips");
             Print($"Target RR: {DesiredRR}");
             Print("========================================");
+
+            // Initialize Moving Average
+            _ma = Indicators.MovingAverage(Bars.ClosePrices, MAPeriod, MovingAverageType.Simple);
 
             _lastTradeDate = DateTime.MinValue;
             _tradeTakenToday = false;
@@ -191,15 +212,22 @@ namespace cAlgo.Robots
 
             Print($"First Candle - O:{open} H:{high} L:{low} C:{close}");
 
-            TradeType tradeType;
-            double entryPrice = Symbol.Ask;
+            // Determine trade direction based on selected mode
+            TradeType? tradeType = DetermineTradeDirection(lastBarIndex, open, close);
+            
+            if (tradeType == null)
+            {
+                Print("No trade signal");
+                return;
+            }
+
+            double entryPrice;
             double stopLoss;
             double takeProfit;
 
-            // Determine trade direction
-            if (close < open) // Bearish - Go SHORT
+            // Execute based on direction
+            if (tradeType == TradeType.Sell) // SHORT
             {
-                tradeType = TradeType.Sell;
                 entryPrice = Symbol.Bid;
                 
                 // SL = candle high + margin, but minimum minSL from entry
@@ -211,11 +239,10 @@ namespace cAlgo.Robots
                 double slDistance = stopLoss - entryPrice;
                 takeProfit = entryPrice - (slDistance * DesiredRR);
 
-                Print($"BEARISH candle detected - Going SHORT");
+                Print($"Going SHORT");
             }
-            else if (close > open) // Bullish - Go LONG
+            else // LONG
             {
-                tradeType = TradeType.Buy;
                 entryPrice = Symbol.Ask;
                 
                 // SL = candle low - margin, but minimum minSL from entry
@@ -227,12 +254,7 @@ namespace cAlgo.Robots
                 double slDistance = entryPrice - stopLoss;
                 takeProfit = entryPrice + (slDistance * DesiredRR);
 
-                Print($"BULLISH candle detected - Going LONG");
-            }
-            else // Doji - No trade
-            {
-                Print("DOJI candle (open = close) - No trade");
-                return;
+                Print($"Going LONG");
             }
 
             // Calculate position size
@@ -251,7 +273,7 @@ namespace cAlgo.Robots
             Print($"  TP: {takeProfit} (RR: {DesiredRR})");
             Print($"  Volume: {volume} units ({volume / 100000:F2} lots)");
 
-            var result = ExecuteMarketOrder(tradeType, SymbolName, volume, _tradeLabel, 
+            var result = ExecuteMarketOrder(tradeType.Value, SymbolName, volume, _tradeLabel, 
                 Math.Abs(entryPrice - stopLoss) / Symbol.PipSize, 
                 Math.Abs(takeProfit - entryPrice) / Symbol.PipSize);
 
@@ -262,6 +284,55 @@ namespace cAlgo.Robots
             else
             {
                 Print($"ERROR: Trade execution failed - {result.Error}");
+            }
+        }
+
+        private TradeType? DetermineTradeDirection(int barIndex, double open, double close)
+        {
+            switch (EntryDirectionMode)
+            {
+                case EntryDirection.FirstCandle:
+                    // Original logic - based on first candle direction
+                    if (close < open)
+                    {
+                        Print("First Candle is BEARISH - Signal: SHORT");
+                        return TradeType.Sell;
+                    }
+                    else if (close > open)
+                    {
+                        Print("First Candle is BULLISH - Signal: LONG");
+                        return TradeType.Buy;
+                    }
+                    else
+                    {
+                        Print("First Candle is DOJI - No signal");
+                        return null;
+                    }
+
+                case EntryDirection.MovingAverage:
+                    // MA logic - enter based on price vs MA
+                    double maValue = _ma.Result[barIndex];
+                    Print($"MA({MAPeriod}): {maValue:F5}, Close: {close:F5}");
+                    
+                    if (close < maValue)
+                    {
+                        Print("Price below MA - Signal: SHORT");
+                        return TradeType.Sell;
+                    }
+                    else if (close > maValue)
+                    {
+                        Print("Price above MA - Signal: LONG");
+                        return TradeType.Buy;
+                    }
+                    else
+                    {
+                        Print("Price exactly at MA - No signal");
+                        return null;
+                    }
+
+                default:
+                    Print("ERROR: Unknown entry direction mode");
+                    return null;
             }
         }
 
@@ -352,6 +423,12 @@ namespace cAlgo.Robots
         PercentBalance,
         PercentEquity,
         AccountCurrency
+    }
+
+    public enum EntryDirection
+    {
+        FirstCandle,
+        MovingAverage
     }
 
     #endregion
