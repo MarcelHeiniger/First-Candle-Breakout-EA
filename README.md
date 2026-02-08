@@ -215,6 +215,24 @@ Before running this EA on a live account:
 
 ## 🔄 Version History
 
+### v1.1.3 - 2026-02-08
+- Fixed time-based closure to avoid swap fees
+- Now uses OnTick() to close positions precisely at specified time
+- Positions close exactly at 23:00 instead of waiting for bar close at midnight
+- Added flag to prevent multiple close attempts on same day
+
+### v1.1.2 - 2026-02-08
+- **CRITICAL FIX**: Position sizing calculation now works correctly for crypto/indices
+- Fixed issue where tiny positions (5 units) were created instead of proper size
+- Improved position size calculation to use minimum volume as base
+- Added more detailed logging for position size calculation
+
+### v1.1.1 - 2026-02-08
+- Fixed MA logic to check MA trend direction (slope) instead of price vs MA
+- MA now compares MA value at candle close vs candle open
+- Removed empty header parameters that created blank input fields
+- Improved parameter organization in UI
+
 ### v1.1.0 - 2026-02-08
 - Added Moving Average filter for entry direction
 - Added Entry Direction parameter (First Candle / Moving Average)

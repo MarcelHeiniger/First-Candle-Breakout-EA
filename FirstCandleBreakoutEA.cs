@@ -10,13 +10,13 @@ using cAlgo.Indicators;
  * EA Name: First Candle Breakout EA
  * Platform: cTrader
  * Author: Marcel Heiniger
- * Version: 1.1.0
+ * Version: 1.1.3
  * Date: 2026-02-08
  * ============================================================================
  * 
  * DESCRIPTION:
  * This EA trades based on the first 1-hour candle of the day with MA filter.
- * - Entry direction can be determined by First Candle or Moving Average
+ * - Entry direction can be determined by First Candle or Moving Average trend
  * - Enters LONG/SHORT based on selected entry logic
  * - Uses dynamic position sizing based on risk parameters
  * - Optional time-based trade closure
@@ -24,6 +24,24 @@ using cAlgo.Indicators;
  * ============================================================================
  * VERSION CONTROL & CHANGELOG
  * ============================================================================
+ * 
+ * v1.1.3 - 2026-02-08
+ * - Fixed time-based closure to avoid swap fees
+ * - Now uses OnTick() to close positions precisely at specified time
+ * - Positions close exactly at 23:00 instead of waiting for bar close at midnight
+ * - Added flag to prevent multiple close attempts on same day
+ * 
+ * v1.1.2 - 2026-02-08
+ * - CRITICAL FIX: Position sizing calculation now works correctly for crypto/indices
+ * - Fixed issue where tiny positions (5 units) were created instead of proper size
+ * - Improved position size calculation to use minimum volume as base
+ * - Added more detailed logging for position size calculation
+ * 
+ * v1.1.1 - 2026-02-08
+ * - Fixed MA logic to check MA trend direction (slope) instead of price vs MA
+ * - MA now compares MA value at candle close vs candle open
+ * - Removed empty header parameters that created blank input fields
+ * - Improved parameter organization in UI
  * 
  * v1.1.0 - 2026-02-08
  * - Added Moving Average filter for entry direction
@@ -94,6 +112,7 @@ namespace cAlgo.Robots
 
         private DateTime _lastTradeDate;
         private bool _tradeTakenToday;
+        private bool _positionsClosedToday;
         private TimeSpan _firstCandleTimeSpan;
         private TimeSpan _closeTradeTimeSpan;
         private string _tradeLabel = "FirstCandleEA";
@@ -121,7 +140,7 @@ namespace cAlgo.Robots
             }
 
             Print("=== First Candle Breakout EA Started ===");
-            Print($"Version: 1.1.0");
+            Print($"Version: 1.1.3");
             Print($"Symbol: {SymbolName}");
             Print($"First Candle Time: {FirstCandleTime}");
             Print($"Close Trade Time: {CloseTradeTime}");
@@ -138,6 +157,7 @@ namespace cAlgo.Robots
 
             _lastTradeDate = DateTime.MinValue;
             _tradeTakenToday = false;
+            _positionsClosedToday = false;
         }
 
         protected override void OnBar()
@@ -149,6 +169,7 @@ namespace cAlgo.Robots
             if (currentDate > _lastTradeDate)
             {
                 _tradeTakenToday = false;
+                _positionsClosedToday = false;
                 Print($"New trading day: {currentDate:yyyy-MM-dd}");
             }
 
@@ -162,11 +183,27 @@ namespace cAlgo.Robots
                 _tradeTakenToday = true;
                 _lastTradeDate = currentDate;
             }
+        }
 
-            // Check for time-based closure
-            if (CloseTradeAtTime && IsCloseTradeTime(currentBarTime))
+        protected override void OnTick()
+        {
+            // Check for time-based closure on every tick to close precisely at specified time
+            if (CloseTradeAtTime && !_positionsClosedToday)
             {
-                CloseAllPositions();
+                DateTime currentTime = GetCurrentTime();
+                TimeSpan currentTimeOfDay = currentTime.TimeOfDay;
+                
+                // Close if we've reached or passed the close time
+                if (currentTimeOfDay >= _closeTradeTimeSpan)
+                {
+                    var positions = Positions.FindAll(_tradeLabel, SymbolName);
+                    if (positions.Length > 0)
+                    {
+                        Print($"Close time reached ({currentTime:HH:mm:ss}) - Closing positions");
+                        CloseAllPositions();
+                        _positionsClosedToday = true;
+                    }
+                }
             }
         }
 
@@ -326,7 +363,7 @@ namespace cAlgo.Robots
 
         private double CalculatePositionSize(double entryPrice, double stopLoss)
         {
-            double slDistanceInPips = Math.Abs(entryPrice - stopLoss) / Symbol.PipSize;
+            double slDistanceInPrice = Math.Abs(entryPrice - stopLoss);
             double riskAmount = 0;
 
             // Calculate risk amount based on unit type
@@ -343,9 +380,23 @@ namespace cAlgo.Robots
                     break;
             }
 
-            // Calculate position size in units
-            double pipValue = Symbol.PipValue;
-            double volumeInUnits = (riskAmount / (slDistanceInPips * pipValue));
+            // Calculate position size based on risk and SL distance
+            // Formula: Volume = Risk / (SL Distance in Price × Pip Value per Unit Volume)
+            double volumeInUnits;
+            
+            // For proper calculation across all symbol types
+            // We calculate: how much does 1 unit lose if SL is hit?
+            // Then: Volume = Risk Amount / Loss per Unit
+            double slDistanceInPips = slDistanceInPrice / Symbol.PipSize;
+            
+            // Get pip value for minimum volume to calculate per-unit risk
+            double minVolume = Symbol.VolumeInUnitsMin;
+            double pipValueForMinVolume = Symbol.PipValue * minVolume;
+            double riskPerMinVolume = slDistanceInPips * pipValueForMinVolume;
+            
+            // Calculate how many min volumes we need
+            double numberOfMinVolumes = riskAmount / riskPerMinVolume;
+            volumeInUnits = numberOfMinVolumes * minVolume;
 
             // Apply maximum lot size cap (convert lots to units)
             double maxVolumeInUnits = MaxLotSize * 100000;
@@ -356,7 +407,8 @@ namespace cAlgo.Robots
 
             Print($"Position Size Calculation:");
             Print($"  Risk Amount: {riskAmount:F2} {Account.Currency}");
-            Print($"  SL Distance: {slDistanceInPips:F1} pips");
+            Print($"  SL Distance: {slDistanceInPips:F1} pips ({slDistanceInPrice:F2} price)");
+            Print($"  Pip Value (min vol): {pipValueForMinVolume:F5}");
             Print($"  Calculated Volume: {volumeInUnits} units ({volumeInUnits / 100000:F2} lots)");
 
             return volumeInUnits;
