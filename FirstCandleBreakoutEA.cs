@@ -10,7 +10,7 @@ using cAlgo.Indicators;
  * EA Name: First Candle Breakout EA
  * Platform: cTrader
  * Author: Marcel Heiniger
- * Version: 1.2.2
+ * Version: 1.2.3
  * Date: 2026-02-08
  * ============================================================================
  * 
@@ -24,6 +24,12 @@ using cAlgo.Indicators;
  * ============================================================================
  * VERSION CONTROL & CHANGELOG
  * ============================================================================
+ * 
+ * v1.2.3 - 2026-02-08
+ * - Fixed compiler warnings
+ * - Renamed TimeZone parameter to TimeZoneMode to avoid conflict with inherited member
+ * - Replaced obsolete Account.Currency with Account.Asset.Name
+ * - Code now compiles without warnings
  * 
  * v1.2.2 - 2026-02-08
  * - Improved parameter naming: "Max SL Value/Unit" → "Risk Per Trade/Unit" (clearer intent)
@@ -103,7 +109,7 @@ namespace cAlgo.Robots
         public double MaxLotSize { get; set; }
 
         [Parameter("Time Zone", DefaultValue = "Broker Server Time", Group = "Timing")]
-        public string TimeZone { get; set; }
+        public string TimeZoneMode { get; set; }
 
         [Parameter("First Candle Time (HH:MM)", DefaultValue = "01:00", Group = "Timing")]
         public string FirstCandleTime { get; set; }
@@ -187,7 +193,7 @@ namespace cAlgo.Robots
             }
 
             Print("=== First Candle Breakout EA Started ===");
-            Print($"Version: 1.2.2");
+            Print($"Version: 1.2.3");
             Print($"Symbol: {SymbolName}");
             Print($"--- Risk Management ---");
             Print($"Risk Per Trade: {MaxSLValue} {MaxSLUnit}");
@@ -494,9 +500,9 @@ namespace cAlgo.Robots
             volumeInUnits = Symbol.NormalizeVolumeInUnits(volumeInUnits, RoundingMode.Down);
 
             Print($"Position Size Calculation:");
-            Print($"  Base Risk Amount: {baseRiskAmount:F2} {Account.Currency}");
+            Print($"  Base Risk Amount: {baseRiskAmount:F2} {Account.Asset.Name}");
             Print($"  Current Draw Down: {currentDD:F2}%");
-            Print($"  Actual Risk Amount: {riskAmount:F2} {Account.Currency}");
+            Print($"  Actual Risk Amount: {riskAmount:F2} {Account.Asset.Name}");
             Print($"  SL Distance: {slDistanceInPips:F1} pips ({slDistanceInPrice:F2} price)");
             Print($"  Pip Value (min vol): {pipValueForMinVolume:F5}");
             Print($"  Calculated Volume: {volumeInUnits} units ({volumeInUnits / 100000:F2} lots)");

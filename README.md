@@ -281,6 +281,12 @@ Before running this EA on a live account:
 
 ## 🔄 Version History
 
+### v1.2.3 - 2026-02-08
+- Fixed compiler warnings
+- Renamed TimeZone parameter to TimeZoneMode to avoid conflict with inherited member
+- Replaced obsolete Account.Currency with Account.Asset.Name
+- Code now compiles without warnings
+
 ### v1.2.2 - 2026-02-08
 - Improved parameter naming: "Max SL Value/Unit" → "Risk Per Trade/Unit" (clearer intent)
 - Reordered parameter groups: Risk Management now appears first (most important)
